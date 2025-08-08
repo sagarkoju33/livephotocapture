@@ -29,28 +29,36 @@ Multiple liveness challenge types (blinking, smiling, head turns, nodding)
 
 1. Add the latest version of package to your pubspec.yaml (and rundart pub get):
 
-````dart
+```dart
 dependencies:
  livephotocapture: ^1.0.0
+```
 
 2. Import the package and use it in your Flutter App.
 
 ```dart
  import 'package:livephotocapture/livephotocapture.dart';
+```
 
 Make sure to add camera permission to your app:
-```ios
+ios
 Add the following to your Info.plist:
+
+```dart
 <key>NSCameraUsageDescription</key>
 <string>This app needs camera access for face liveness verification</string>
+```
 
-```Android
+Android
 Add the following to your AndroidManifest.xml:
-<uses-permission android:name="android.permission.CAMERA" />
 
+```dart
+<uses-permission android:name="android.permission.CAMERA" />
+```
 
 ## Usage
 
+```dart
 import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -205,10 +213,11 @@ String getHintText(Rulesets state) {
      return '🧍‍♂️ Center Your Face';
  }
 }
-
-````
+```
 
 ## Available Challenge Types
+
+```dart
 
 Rulesets.smiling - Verify that the user can smile
 Rulesets.blink - Verify that the user can blink
@@ -217,3 +226,4 @@ Rulesets.tiltDown - Verify that the user can turn their head down
 Rulesets.toLeft - Verify that the user can turn their head left
 Rulesets.toRight - Verify that the user can turn their head right
 Rulesets.normal - Verify that the user can keep neutral
+```

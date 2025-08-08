@@ -1,6 +1,7 @@
 name: livephotocapture
 description: A starting point for Dart libraries or applications.
 version: 1.0.0
+repository: https://github.com/sagarkoju33/livephotocapture
 # repository: https://github.com/my_org/my_repo
 
 environment:
