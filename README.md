@@ -1,5 +1,3 @@
-A highly customizable Flutter package for face liveness detection with multiple challenge types. This package helps you verify that a real person is present in front of the camera, not a photo, video, or mask.
-
 Live Photo Capture
 
 ## Features
