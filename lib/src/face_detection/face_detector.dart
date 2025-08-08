@@ -1,0 +1,469 @@
+import 'dart:developer' as dev;
+import 'dart:io';
+import 'package:camera/camera.dart';
+import 'dart:math';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:livephotocapture/src/debouncer/debouncer.dart';
+import 'package:livephotocapture/src/detector_view/detector_view.dart'
+    show DetectorView;
+import 'package:livephotocapture/src/painter/dotted_painter.dart';
+import 'package:livephotocapture/src/rule_set/rule_set.dart';
+
+class FaceDetectorScreen extends StatefulWidget {
+  final int pauseDurationInSeconds;
+  final Size cameraSize;
+  final Function(bool validated)? onSuccessValidation;
+  final void Function(Rulesets ruleset)? onRulesetCompleted;
+  final List<Rulesets> ruleset;
+  final Color activeProgressColor;
+  final Color progressColor;
+
+  final Widget Function({
+    required Rulesets state,
+    required int countdown,
+    required bool hasFace,
+  })
+  child;
+  final Widget Function(CameraController? controller) onValidationDone;
+  final int totalDots;
+  final double dotRadius;
+  final Color? backgroundColor;
+  final EdgeInsetsGeometry? contextPadding;
+  const FaceDetectorScreen({
+    super.key,
+    required this.onRulesetCompleted,
+    required this.onValidationDone,
+    this.ruleset = const [
+      Rulesets.smiling,
+      Rulesets.blink,
+      Rulesets.toRight,
+      Rulesets.toLeft,
+      Rulesets.tiltUp,
+      Rulesets.tiltDown,
+      Rulesets.normal,
+    ],
+    required this.child,
+    this.progressColor = Colors.green,
+    this.activeProgressColor = Colors.red,
+    this.totalDots = 60,
+    this.dotRadius = 3,
+    this.onSuccessValidation,
+    this.backgroundColor = Colors.white,
+    this.contextPadding,
+    this.cameraSize = const Size(200, 200),
+    this.pauseDurationInSeconds = 5,
+  }) : assert(ruleset.length != 0, 'Ruleset cannot be empty');
+
+  @override
+  State<FaceDetectorScreen> createState() => _FaceDetectorScreenState();
+}
+
+class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
+  ValueNotifier<List<Rulesets>> ruleset = ValueNotifier<List<Rulesets>>([]);
+  final FaceDetector _faceDetector = FaceDetector(
+    options: FaceDetectorOptions(
+      enableContours: true,
+      enableLandmarks: true,
+      enableTracking: true,
+      performanceMode: FaceDetectorMode.accurate,
+      enableClassification: true,
+    ),
+  );
+  bool _canProcess = true;
+  bool _isBusy = false;
+  String? _text;
+  final _cameraLensDirection = CameraLensDirection.front;
+  late ValueNotifier<Rulesets?> _currentTest;
+  Debouncer? _debouncer;
+  CameraController? controller;
+  bool hasFace = false;
+  @override
+  void dispose() {
+    _canProcess = false;
+    _faceDetector.close();
+    _debouncer?.stop();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    ruleset.value = widget.ruleset.toList();
+    _currentTest = ValueNotifier<Rulesets?>(ruleset.value.first);
+    _debouncer = Debouncer(
+      durationInSeconds: widget.pauseDurationInSeconds,
+      onComplete: () =>
+          dev.log('Timer is completed', name: 'Photo verification timer'),
+    );
+    _debouncer?.start();
+
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: widget.backgroundColor ?? Colors.transparent,
+      shadowColor: Colors.transparent,
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      child: Container(
+        padding:
+            widget.contextPadding ??
+            EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+        width: double.infinity,
+        child: Column(
+          mainAxisSize: MainAxisSize.max,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ValueListenableBuilder(
+              valueListenable: _currentTest,
+              builder: (context, state, child) {
+                double targetProgress = state != null
+                    ? (widget.ruleset.indexOf(state) / widget.ruleset.length)
+                          .toDouble()
+                    : 1.0;
+                return TweenAnimationBuilder(
+                  duration: Duration(milliseconds: 500), // Animation speed
+                  tween: Tween<double>(begin: 0, end: targetProgress),
+                  builder: (context, animation, _) => CustomPaint(
+                    painter: DottedCirclePainter(
+                      activeProgressColor: widget.activeProgressColor,
+                      progressColor: widget.progressColor,
+                      progress: animation,
+                      totalDots: widget.totalDots,
+                      dotRadius: widget.dotRadius,
+                    ),
+                    child: child,
+                  ),
+                );
+              },
+              child: Container(
+                height: widget.cameraSize.height,
+                width: widget.cameraSize.width,
+                decoration: BoxDecoration(shape: BoxShape.circle),
+                child: DetectorView(
+                  cameraSize: widget.cameraSize,
+                  onController: (controller_) => controller = controller_,
+                  title: 'Face Detector',
+                  text: _text,
+                  onImage: _processImage,
+                  initialCameraLensDirection: _cameraLensDirection,
+                ),
+              ),
+            ),
+            SizedBox(height: 5),
+            ValueListenableBuilder<Rulesets?>(
+              valueListenable: _currentTest,
+              builder: (context, state, child) {
+                if (state != null) {
+                  return widget.child(
+                    state: state,
+                    countdown: _debouncer!.timeLeft,
+                    hasFace: hasFace,
+                  );
+                }
+                return SizedBox.shrink();
+              },
+            ),
+            AnimatedBuilder(
+              animation: Listenable.merge([_currentTest, ruleset]),
+              builder: (context, child) {
+                if (_currentTest.value == null &&
+                    ruleset.value.isEmpty &&
+                    controller != null) {
+                  return Expanded(
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: widget.onValidationDone(controller),
+                    ),
+                  );
+                } else {
+                  return SizedBox.shrink();
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _processImage(InputImage inputImage) async {
+    if (!_canProcess) return;
+    if (_isBusy) return;
+    _isBusy = true;
+    setState(() {
+      _text = '';
+    });
+    final faces = await _faceDetector.processImage(inputImage);
+    hasFace = faces.isNotEmpty;
+    if (!(_debouncer?.isRunning ?? false)) handleRuleSet(faces);
+    if (inputImage.metadata?.size != null &&
+        inputImage.metadata?.rotation != null) {
+    } else {
+      String text = 'Faces found: ${faces.length}\n\n';
+      for (final face in faces) {
+        text += 'face: ${face.boundingBox}\n\n';
+      }
+      _text = text;
+    }
+    _isBusy = false;
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void handleRuleSet(List<Face> faces) {
+    if (faces.isEmpty) return;
+    for (Face face in faces) {
+      startRandomizedTime(face);
+    }
+  }
+
+  startRandomizedTime(Face face) {
+    if (ruleset.value.isEmpty) {
+      widget.onSuccessValidation?.call(true);
+      return;
+    } else {
+      widget.onSuccessValidation?.call(false);
+    }
+
+    var currentRuleset = ruleset.value.removeAt(0);
+    bool isDetected = false;
+    switch (currentRuleset) {
+      case Rulesets.smiling:
+        isDetected = _onSmilingDetected(face);
+        break;
+      case Rulesets.blink:
+        isDetected = _onBlinkDetected(face);
+        break;
+      case Rulesets.tiltUp:
+        isDetected = _detectHeadTiltUp(face);
+        break;
+      case Rulesets.tiltDown:
+        isDetected = _detectHeadTiltDown(face);
+        break;
+      case Rulesets.toLeft:
+        isDetected = _detectLeftHeadMovement(face);
+        break;
+      case Rulesets.toRight:
+        isDetected = _detectRightHeadMovement(face);
+        break;
+      case Rulesets.normal:
+        isDetected = _onNormalDetected(face);
+        break;
+    }
+    if (!isDetected) {
+      ruleset.value.insert(0, currentRuleset);
+    } else {
+      if (ruleset.value.isNotEmpty) {
+        _currentTest.value = ruleset.value.first;
+        _debouncer?.start();
+      } else {
+        _currentTest.value = null;
+        _debouncer?.stop();
+      }
+      HapticFeedback.vibrate();
+    }
+  }
+
+  bool _detectHeadTiltUp(Face face) {
+    return _detectHeadTilt(face, up: true);
+  }
+
+  bool _detectHeadTiltDown(Face face) {
+    return _detectHeadTilt(face, up: false);
+  }
+
+  bool _detectHeadTilt(Face face, {bool up = true}) {
+    final double? rotX = face.headEulerAngleX;
+    if (rotX == null) return false;
+
+    if (!up) {
+      dev.log(rotX.toString(), name: 'Head Movement');
+      if (rotX < -20) {
+        // Adjust threshold if needed
+        widget.onRulesetCompleted?.call(Rulesets.tiltUp);
+        return true;
+      }
+    } else {
+      if (rotX > 20) {
+        widget.onRulesetCompleted?.call(Rulesets.tiltUp);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _detectRightHeadMovement(Face face) {
+    return _detectHeadMovement(face, left: true);
+  }
+
+  bool _detectLeftHeadMovement(Face face) {
+    return _detectHeadMovement(face, left: false);
+  }
+
+  bool _detectHeadMovement(Face face, {bool left = true}) {
+    final double? rotY = face.headEulerAngleY;
+
+    if (rotY == null) return false;
+    final double adjustedRotY = Platform.isIOS ? -rotY : rotY;
+
+    if (left) {
+      if (adjustedRotY < -40) {
+        widget.onRulesetCompleted?.call(Rulesets.toLeft);
+        return true;
+      }
+    } else {
+      if (adjustedRotY > 40) {
+        widget.onRulesetCompleted?.call(Rulesets.toRight);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _onBlinkDetected(Face face) {
+    final double? leftEyeOpenProb = face.leftEyeOpenProbability;
+    final double? rightEyeOpenProb = face.rightEyeOpenProbability;
+    const double eyeOpenThreshold = 0.6;
+    if (leftEyeOpenProb != null && rightEyeOpenProb != null) {
+      if (leftEyeOpenProb < eyeOpenThreshold &&
+          rightEyeOpenProb < eyeOpenThreshold) {
+        widget.onRulesetCompleted?.call(Rulesets.blink);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _onSmilingDetected(Face face) {
+    if (face.smilingProbability != null) {
+      final double? smileProb = face.smilingProbability;
+      if ((smileProb ?? 0) > .5) {
+        if (widget.onRulesetCompleted != null) {
+          widget.onRulesetCompleted!(Rulesets.smiling);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+  //   bool _onNormalDetected(Face face) {
+  //   final double? smileProb = face.smilingProbability;
+  //   final double? leftEyeOpenProb = face.leftEyeOpenProbability;
+  //   final double? rightEyeOpenProb = face.rightEyeOpenProbability;
+  //   final double? rotX = face.headEulerAngleX;
+  //   final double? rotY = face.headEulerAngleY;
+
+  //   // Check smile threshold (not smiling)
+  //   final bool notSmiling = (smileProb ?? 1.0) < 0.3;
+
+  //   // Check eye open threshold
+  //   final bool eyesOpen = (leftEyeOpenProb ?? 0.0) > 0.5 && (rightEyeOpenProb ?? 0.0) > 0.5;
+
+  //   // Check head is facing straight (not tilted)
+  //   final bool isFacingForward = (rotX != null && rotX.abs() < 10) && (rotY != null && rotY.abs() < 10);
+
+  //   if (notSmiling && eyesOpen && isFacingForward) {
+  //     widget.onRulesetCompleted?.call(Rulesets.normal);
+  //     return true;
+  //   }
+
+  //   return false;
+  // }
+  // bool _onNormalDetected(Face face) {
+  //   final double? smileProb = face.smilingProbability;
+  //   final double? leftEyeOpenProb = face.leftEyeOpenProbability;
+  //   final double? rightEyeOpenProb = face.rightEyeOpenProbability;
+  //   final double? rotX = face.headEulerAngleX;
+  //   final double? rotY = face.headEulerAngleY;
+
+  //   // Heuristic checks
+  //   final bool notSmiling = (smileProb ?? 1.0) < 0.25;
+  //   final bool eyesOpen =
+  //       (leftEyeOpenProb ?? 0.0) > 0.5 && (rightEyeOpenProb ?? 0.0) > 0.5;
+  //   final bool facingForward =
+  //       (rotX?.abs() ?? 0) < 10 && (rotY?.abs() ?? 0) < 10;
+
+  //   // Optional: check for presence of eyebrow contours
+  //   final bool hasContours =
+  //       face.contours[FaceContourType.leftEyebrowTop] != null &&
+  //       face.contours[FaceContourType.rightEyebrowTop] != null;
+
+  //   if (notSmiling && eyesOpen && facingForward && hasContours) {
+  //     widget.onRulesetCompleted?.call(Rulesets.normal);
+  //     return true;
+  //   }
+
+  //   return false;
+  // }
+  List<double>? referenceEmbedding; // Store registered person's face embedding
+
+  bool _onNormalDetected(Face face) {
+    final double? smileProb = face.smilingProbability;
+    final double? leftEyeOpenProb = face.leftEyeOpenProbability;
+    final double? rightEyeOpenProb = face.rightEyeOpenProbability;
+    final double? rotX = face.headEulerAngleX;
+    final double? rotY = face.headEulerAngleY;
+
+    final bool notSmiling = (smileProb ?? 1.0) < 0.25;
+    final bool eyesOpen =
+        (leftEyeOpenProb ?? 0.0) > 0.5 && (rightEyeOpenProb ?? 0.0) > 0.5;
+    final bool facingForward =
+        (rotX?.abs() ?? 0) < 10 && (rotY?.abs() ?? 0) < 10;
+
+    final bool hasContours =
+        face.contours[FaceContourType.leftEyebrowTop] != null &&
+        face.contours[FaceContourType.rightEyebrowTop] != null;
+
+    if (notSmiling && eyesOpen && facingForward && hasContours) {
+      // Get the current embedding
+      final currentEmbedding = getFakeEmbedding(face);
+
+      if (referenceEmbedding == null) {
+        // First time: save the registered face (e.g., from onboarding)
+        referenceEmbedding = currentEmbedding;
+        debugPrint("Reference face saved.");
+        return false;
+      }
+
+      final same = isSamePerson(referenceEmbedding!, currentEmbedding);
+      if (!same) {
+        debugPrint("Different person detected!");
+        return false;
+      }
+
+      // All checks passed including identity
+      widget.onRulesetCompleted?.call(Rulesets.normal);
+      return true;
+    }
+
+    return false;
+  }
+
+  List<double> getFakeEmbedding(Face face) {
+    // You should replace this with real embedding logic
+    return List.generate(128, (index) => Random().nextDouble());
+  }
+
+  bool isSamePerson(
+    List<double> embedding1,
+    List<double> embedding2, {
+    double threshold = 1.0,
+  }) {
+    return compareEmbeddings(embedding1, embedding2) < threshold;
+  }
+
+  double compareEmbeddings(List<double> e1, List<double> e2) {
+    double sum = 0;
+    for (int i = 0; i < e1.length; i++) {
+      sum += pow(e1[i] - e2[i], 2).toDouble();
+    }
+    return sqrt(sum); // Euclidean distance
+  }
+}

@@ -1,0 +1,22 @@
+name: livephotocapture
+description: A starting point for Dart libraries or applications.
+version: 1.0.0
+# repository: https://github.com/my_org/my_repo
+
+environment:
+  sdk: ^3.8.1
+
+# Add regular dependencies here.
+dependencies:
+  flutter:
+    sdk: flutter
+  camera: ^0.10.6
+  camera_android: ^0.10.10
+  camera_avfoundation: ^0.9.18+4
+  google_mlkit_commons: ^0.9.0
+  google_mlkit_face_detection: ^0.12.0
+  # path: ^1.8.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.24.0
