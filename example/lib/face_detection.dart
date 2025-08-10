@@ -31,11 +31,31 @@ class __FaceDetectorState extends State<_FaceDetector> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: FaceDetectorScreen(
-          onSuccessValidation: (validated) {
-            log('Face verification is completed', name: 'Validation');
-          },
+          // ruleset: [Rulesets.normal],
+          onSuccessValidation: (validated) {},
           onValidationDone: (controller) {
-            _captureIfSmiled(controller);
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              if (_hasCapturedImage || _isCapturing) return;
+
+              if (controller == null || !controller.value.isInitialized) {
+                log("Camera controller not initialized");
+                return;
+              }
+
+              try {
+                _isCapturing = true;
+                final XFile image = await controller.takePicture();
+                log('Captured image at: ${image.path}');
+                setState(() {
+                  capturedImage = image;
+                  _hasCapturedImage = true;
+                });
+              } catch (e) {
+                log("Error capturing image: $e");
+              } finally {
+                _isCapturing = false;
+              }
+            });
 
             return Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -70,14 +90,12 @@ class __FaceDetectorState extends State<_FaceDetector> {
           child:
               ({
                 required int countdown,
-                required Rulesets state,
                 required bool hasFace,
+                required Rulesets state,
               }) => Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // const Spacer(),
                   SizedBox(height: 60),
-                  // Face Detection Status
                   AnimatedSize(
                     duration: const Duration(milliseconds: 200),
                     child: Text(
@@ -89,20 +107,28 @@ class __FaceDetectorState extends State<_FaceDetector> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
-
-                  // Hint Text
+                  SizedBox(height: 20),
                   Text(
                     getHintText(state),
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 20),
+                  Text(
+                    countdown > 0
+                        ? "Time remaining: $countdown seconds"
+                        : "Starting...",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                 ],
               ),
+
           onRulesetCompleted: (ruleset) {
             if (!_completedRuleset.contains(ruleset)) {
               setState(() {
@@ -115,40 +141,26 @@ class __FaceDetectorState extends State<_FaceDetector> {
     );
   }
 
-  void _captureIfSmiled(dynamic controller) async {
-    try {
-      if (_hasCapturedImage) return;
-      if (controller != null && controller.value.isInitialized) {
-        final XFile image = await controller.takePicture();
-        log('Captured image at: ${image.path}');
-        setState(() {
-          capturedImage = image;
-          _hasCapturedImage = true;
-        });
-      } else {
-        log("Camera controller not initialized");
-      }
-    } catch (e) {
-      log("Error capturing image: $e");
-    }
-  }
-}
+  bool _isCapturing = false;
 
-String getHintText(Rulesets state) {
-  switch (state) {
-    case Rulesets.smiling:
-      return '😊 Please Smile';
-    case Rulesets.blink:
-      return '😉 Please Blink';
-    case Rulesets.tiltUp:
-      return '👆 Look Up';
-    case Rulesets.tiltDown:
-      return '👇 Look Down';
-    case Rulesets.toLeft:
-      return '👈 Look Left';
-    case Rulesets.toRight:
-      return '👉 Look Right';
-    case Rulesets.normal:
-      return '🧍‍♂️ Center Your Face';
+  // void _captureIfSmiled(dynamic controller) async {}
+
+  String getHintText(Rulesets state) {
+    switch (state) {
+      case Rulesets.smiling:
+        return '😊 Please Smile';
+      case Rulesets.blink:
+        return '😉 Please Blink';
+      case Rulesets.tiltUp:
+        return '👆 Look Up';
+      case Rulesets.tiltDown:
+        return '👇 Look Down';
+      case Rulesets.toLeft:
+        return '👈 Look Left';
+      case Rulesets.toRight:
+        return '👉 Look Right';
+      case Rulesets.normal:
+        return '🧍‍♂️ Center Your Face';
+    }
   }
 }

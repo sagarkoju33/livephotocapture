@@ -1,5 +1,6 @@
 import 'dart:developer' as dev;
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:camera/camera.dart';
 import 'dart:math';
 
@@ -254,7 +255,14 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
         isDetected = _detectRightHeadMovement(face);
         break;
       case Rulesets.normal:
-        isDetected = _onNormalDetected(face);
+        if (_isLockedFace(face)) {
+          isDetected = _onNormalDetected(face);
+        } else {
+          debugPrint(
+            "Unknown face detected after head tilt — skipping capture.",
+          );
+          isDetected = false;
+        }
         break;
     }
     if (!isDetected) {
@@ -271,6 +279,38 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
     }
   }
 
+  bool _isLockedFace(Face face) {
+    if (!faceLocked) return true; // not locked yet, allow detection
+
+    // If trackingId matches, it's the same face
+    if (lockedTrackingId != null && face.trackingId == lockedTrackingId) {
+      return true;
+    }
+
+    // Backup check: bounding box overlap
+    if (lockedFaceBounds != null) {
+      final overlap = _calculateOverlap(lockedFaceBounds!, face.boundingBox);
+      return overlap > 0.7;
+    }
+
+    return false;
+  }
+
+  double _calculateOverlap(Rect r1, Rect r2) {
+    final double xOverlap = math.max(
+      0,
+      math.min(r1.right, r2.right) - math.max(r1.left, r2.left),
+    );
+    final double yOverlap = math.max(
+      0,
+      math.min(r1.bottom, r2.bottom) - math.max(r1.top, r2.top),
+    );
+    final double intersection = xOverlap * yOverlap;
+    final double union =
+        r1.width * r1.height + r2.width * r2.height - intersection;
+    return intersection / union;
+  }
+
   bool _detectHeadTiltUp(Face face) {
     return _detectHeadTilt(face, up: true);
   }
@@ -279,6 +319,9 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
     return _detectHeadTilt(face, up: false);
   }
 
+  int? lockedTrackingId; // store the verified face id
+  Rect? lockedFaceBounds;
+  bool faceLocked = false;
   bool _detectHeadTilt(Face face, {bool up = true}) {
     final double? rotX = face.headEulerAngleX;
     if (rotX == null) return false;
@@ -291,7 +334,11 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
         return true;
       }
     } else {
-      if (rotX > 20) {
+      if (rotX > 20 && !faceLocked) {
+        lockedTrackingId = face.trackingId;
+        lockedFaceBounds = face.boundingBox;
+        faceLocked = true; // lock the face
+        debugPrint("Face locked after head tilt down.");
         widget.onRulesetCompleted?.call(Rulesets.tiltUp);
         return true;
       }
@@ -423,7 +470,7 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
 
     if (notSmiling && eyesOpen && facingForward && hasContours) {
       // Get the current embedding
-      final currentEmbedding = getFakeEmbedding(face);
+      final currentEmbedding = getDeterministicEmbedding(face);
 
       if (referenceEmbedding == null) {
         // First time: save the registered face (e.g., from onboarding)
@@ -446,9 +493,10 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
     return false;
   }
 
-  List<double> getFakeEmbedding(Face face) {
-    // You should replace this with real embedding logic
-    return List.generate(128, (index) => Random().nextDouble());
+  List<double> getDeterministicEmbedding(Face face) {
+    final seed = (face.boundingBox.left + face.boundingBox.top).toInt();
+    final rand = Random(seed);
+    return List.generate(10, (index) => rand.nextDouble());
   }
 
   bool isSamePerson(

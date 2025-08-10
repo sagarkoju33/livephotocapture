@@ -4,6 +4,7 @@ Live Photo Capture
 
 A Flutter plugin to use for Face Detection to detect faces in an image, identify key facial features, and get the contours of detected faces.
 Multiple liveness challenge types (blinking, smiling, head turns, nodding)
+```dart
 🔄 Random challenge sequence generation for enhanced security
 🎯 Face centering guidance with visual feedback
 🔍 Anti-spoofing measures (screen glare detection, motion correlation)
@@ -11,7 +12,7 @@ Multiple liveness challenge types (blinking, smiling, head turns, nodding)
 🌈 Animated progress indicators, status displays, and overlays
 📱 Simple integration with Flutter apps
 📸 Optional image capture capability
-
+```
 ## Installation
 
 1. Add the latest version of package to your pubspec.yaml (and rundart pub get):
@@ -80,7 +81,6 @@ class __FaceDetectorState extends State<_FaceDetector> {
      body: SafeArea(
        child: FaceDetectorScreen(
          onSuccessValidation: (validated) {
-           log('Face verification is completed', name: 'Validation');
          },
          onValidationDone: (controller) {
            _captureIfSmiled(controller);
