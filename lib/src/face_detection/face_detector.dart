@@ -1,6 +1,7 @@
 import 'dart:developer' as dev;
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'dart:math';
 
@@ -34,6 +35,7 @@ class FaceDetectorScreen extends StatefulWidget {
   final double dotRadius;
   final Color? backgroundColor;
   final EdgeInsetsGeometry? contextPadding;
+  final bool hideCloseButton;
   const FaceDetectorScreen({
     super.key,
     required this.onRulesetCompleted,
@@ -57,6 +59,7 @@ class FaceDetectorScreen extends StatefulWidget {
     this.contextPadding,
     this.cameraSize = const Size(200, 200),
     this.pauseDurationInSeconds = 5,
+    this.hideCloseButton = false,
   }) : assert(ruleset.length != 0, 'Ruleset cannot be empty');
 
   @override
@@ -114,12 +117,23 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
       child: Container(
         padding:
             widget.contextPadding ??
-            EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+            EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+
         width: double.infinity,
         child: Column(
           mainAxisSize: MainAxisSize.max,
-          mainAxisAlignment: MainAxisAlignment.center,
+          // mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            widget.hideCloseButton
+                ? Align(
+                    alignment: Alignment.topRight,
+                    child: IconButton(
+                      icon: Icon(Icons.close, color: Colors.black),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+            SizedBox(height: 80),
             ValueListenableBuilder(
               valueListenable: _currentTest,
               builder: (context, state, child) {
