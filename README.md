@@ -3,7 +3,8 @@ Live Photo Capture
 ## Features
 
 A Flutter plugin to use for Face Detection to detect faces in an image, identify key facial features, and get the contours of detected faces.
-Multiple liveness challenge types (blinking, smiling, head turns, nodding)
+Multiple liveness challenge types (blinking, smiling, head turns, nodding).A real-time facial verification feature using Google ML Kit for liveliness detection. It ensures user interaction through smiling, blinking, and head movements. Features include face detection, dynamic feedback, a countdown timer, and customizable UI—ideal for secure authentication and anti-spoofisng verification. 🚀
+
 ```dart
 🔄 Random challenge sequence generation for enhanced security
 🎯 Face centering guidance with visual feedback
@@ -13,13 +14,14 @@ Multiple liveness challenge types (blinking, smiling, head turns, nodding)
 📱 Simple integration with Flutter apps
 📸 Optional image capture capability
 ```
+
 ## Installation
 
 1. Add the latest version of package to your pubspec.yaml (and rundart pub get):
 
 ```dart
 dependencies:
- livephotocapture: ^1.0.0
+ livephotocapture: ^1.0.1
 ```
 
 2. Import the package and use it in your Flutter App.
@@ -34,7 +36,9 @@ Add the following to your Info.plist:
 
 ```dart
 <key>NSCameraUsageDescription</key>
-<string>This app needs camera access for face liveness verification</string>
+ <string>your usage description here</string>
+ <key>NSMicrophoneUsageDescription</key>
+ <string>your usage description here</string>
 ```
 
 Android
