@@ -21,7 +21,7 @@ Multiple liveness challenge types (blinking, smiling, head turns, nodding).A rea
 
 ```dart
 dependencies:
- livephotocapture: ^1.0.1
+ livephotocapture: ^1.0.3
 ```
 
 2. Import the package and use it in your Flutter App.
@@ -41,6 +41,8 @@ Add the following to your Info.plist:
  <key>NSMicrophoneUsageDescription</key>
  <string>your usage description here</string>
 ```
+
+<img src="https://github.com/sagarkoju33/livephotocapture/raw/94285479c0890b4856d480467a160eae6d2b6a0a/assets/ios_setting.png" width="150" alt="Ios Setting">
 
 Android
 Add the following to your AndroidManifest.xml:
