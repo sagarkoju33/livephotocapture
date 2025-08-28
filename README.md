@@ -32,6 +32,7 @@ dependencies:
 
 Make sure to add camera permission to your app:
 ios
+Minimum iOS Deployment Target: 15.5
 Add the following to your Info.plist:
 
 ```dart
