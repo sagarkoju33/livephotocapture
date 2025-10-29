@@ -124,7 +124,7 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
           mainAxisSize: MainAxisSize.max,
           // mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            widget.hideCloseButton
+            !widget.hideCloseButton
                 ? Align(
                     alignment: Alignment.topRight,
                     child: IconButton(
