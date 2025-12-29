@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as dev;
 import 'dart:io';
 import 'dart:math' as math;
@@ -14,6 +15,7 @@ import 'package:livephotocapture/src/detector_view/detector_view.dart'
     show DetectorView;
 import 'package:livephotocapture/src/painter/dotted_painter.dart';
 import 'package:livephotocapture/src/rule_set/rule_set.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class FaceDetectorScreen extends StatefulWidget {
   final int pauseDurationInSeconds;
@@ -66,7 +68,8 @@ class FaceDetectorScreen extends StatefulWidget {
   State<FaceDetectorScreen> createState() => _FaceDetectorScreenState();
 }
 
-class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
+class _FaceDetectorScreenState extends State<FaceDetectorScreen>
+    with WidgetsBindingObserver {
   ValueNotifier<List<Rulesets>> ruleset = ValueNotifier<List<Rulesets>>([]);
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
@@ -87,6 +90,7 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
   bool hasFace = false;
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _canProcess = false;
     _faceDetector.close();
     _debouncer?.stop();
@@ -95,6 +99,7 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
 
   @override
   void initState() {
+    WidgetsBinding.instance.addObserver(this);
     ruleset.value = widget.ruleset.toList();
     _currentTest = ValueNotifier<Rulesets?>(ruleset.value.first);
     _debouncer = Debouncer(
@@ -105,6 +110,31 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
     _debouncer?.start();
 
     super.initState();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) async {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      // Stop camera when app goes to background
+      await _disposeCamera();
+      _debouncer?.stop();
+    } else if (state == AppLifecycleState.resumed) {
+      dev.log("ssssssssssss");
+
+      _debouncer?.start();
+    }
+  }
+
+  Future<void> _disposeCamera() async {
+    if (controller != null) {
+      try {
+        await controller!.dispose();
+      } catch (_) {}
+      controller = null;
+    }
   }
 
   @override
@@ -174,16 +204,22 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
             ValueListenableBuilder<Rulesets?>(
               valueListenable: _currentTest,
               builder: (context, state, child) {
-                if (state != null) {
-                  return widget.child(
-                    state: state,
-                    countdown: _debouncer!.timeLeft,
-                    hasFace: hasFace,
+                if (state != null && _debouncer != null) {
+                  return ValueListenableBuilder<int>(
+                    valueListenable: _debouncer!.timeLeft,
+                    builder: (context, countdown, _) {
+                      return widget.child(
+                        state: state,
+                        countdown: countdown,
+                        hasFace: hasFace,
+                      );
+                    },
                   );
                 }
                 return SizedBox.shrink();
               },
             ),
+
             AnimatedBuilder(
               animation: Listenable.merge([_currentTest, ruleset]),
               builder: (context, child) {

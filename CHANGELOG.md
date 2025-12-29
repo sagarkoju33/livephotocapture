@@ -21,4 +21,8 @@
 ## 1.0.5
 
 - permission denied issue fix
+
+## 1.0.6
+
+- permission denied issue fix in case of camera back
 - .

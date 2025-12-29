@@ -45,14 +45,13 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     if (_cameras.isEmpty) {
       _cameras = await availableCameras();
     }
-    for (var i = 0; i < _cameras.length; i++) {
-      if (_cameras[i].lensDirection == widget.initialCameraLensDirection) {
-        _cameraIndex = i;
-        break;
-      }
-    }
+
+    _cameraIndex = _cameras.indexWhere(
+      (cam) => cam.lensDirection == widget.initialCameraLensDirection,
+    );
+
     if (_cameraIndex != -1) {
-      _startLiveFeed();
+      await _startLiveFeed();
     }
   }
 
@@ -66,6 +65,31 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return _liveFeedBody();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissionAndRestartCamera();
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _stopLiveFeed();
+    }
+  }
+
+  Future<void> _checkPermissionAndRestartCamera() async {
+    final status = await Permission.camera.status;
+    if (status.isGranted) {
+      // Stop previous controller if any
+      await _stopLiveFeed();
+      // Re-initialize
+      _initialize();
+    } else {
+      // Optionally prompt the user
+      await openAppSettings();
+    }
   }
 
   Widget _liveFeedBody() {
@@ -96,14 +120,9 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   Future<void> _startLiveFeed() async {
     try {
       final status = await Permission.camera.request();
-
-      if (!status.isGranted) {
-        await openAppSettings();
-        return;
-      }
+      if (!status.isGranted) return;
 
       final camera = _cameras[_cameraIndex];
-
       _controller = CameraController(
         camera,
         ResolutionPreset.high,
@@ -123,8 +142,6 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       widget.onCameraLensDirectionChanged?.call(camera.lensDirection);
 
       setState(() {});
-    } on CameraException catch (e) {
-      debugPrint('CameraException: ${e.code} - ${e.description}');
     } catch (e) {
       debugPrint('Camera error: $e');
     }
@@ -172,7 +189,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   }
 
   Future _stopLiveFeed() async {
-    await _controller?.stopImageStream();
+    // await _controller?.stopImageStream();
     await _controller?.dispose();
     _controller = null;
   }
