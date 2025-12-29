@@ -3,6 +3,7 @@ import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class CameraView extends StatefulWidget {
   const CameraView({
@@ -83,38 +84,49 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
         child: FittedBox(
           fit: BoxFit.cover,
           child: SizedBox(
-              width: _controller!.value.previewSize!.height,
-              height: _controller!.value.previewSize!.width,
-              child: CameraPreview(_controller!)),
+            width: _controller!.value.previewSize!.height,
+            height: _controller!.value.previewSize!.width,
+            child: CameraPreview(_controller!),
+          ),
         ),
       ),
     );
   }
 
-  Future _startLiveFeed() async {
+  Future<void> _startLiveFeed() async {
     try {
+      final status = await Permission.camera.request();
+
+      if (!status.isGranted) {
+        await openAppSettings();
+        return;
+      }
+
       final camera = _cameras[_cameraIndex];
-      _controller = CameraController(camera, ResolutionPreset.high,
-          enableAudio: false,
-          imageFormatGroup: Platform.isAndroid
-              ? ImageFormatGroup.nv21
-              : ImageFormatGroup.bgra8888);
-      _controller?.initialize().then((_) {
-        if (!mounted) {
-          return;
-        }
-        _controller?.startImageStream(_processCameraImage).then((value) {
-          if (widget.onCameraFeedReady != null) {
-            widget.onCameraFeedReady!();
-          }
-          if (widget.onCameraLensDirectionChanged != null) {
-            widget.onCameraLensDirectionChanged!(camera.lensDirection);
-          }
-        });
-        setState(() {});
-      });
-    } catch (ex) {
-      debugPrint('Camera error: $ex');
+
+      _controller = CameraController(
+        camera,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup: Platform.isAndroid
+            ? ImageFormatGroup.nv21
+            : ImageFormatGroup.bgra8888,
+      );
+
+      await _controller!.initialize();
+
+      if (!mounted) return;
+
+      await _controller!.startImageStream(_processCameraImage);
+
+      widget.onCameraFeedReady?.call();
+      widget.onCameraLensDirectionChanged?.call(camera.lensDirection);
+
+      setState(() {});
+    } on CameraException catch (e) {
+      debugPrint('CameraException: ${e.code} - ${e.description}');
+    } catch (e) {
+      debugPrint('Camera error: $e');
     }
   }
 
@@ -221,10 +233,11 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     return InputImage.fromBytes(
       bytes: shouldOverride ? convertYUV420ToNV21(image) : plane.bytes,
       metadata: InputImageMetadata(
-          size: Size(image.width.toDouble(), image.height.toDouble()),
-          rotation: rotation, // used only in Android
-          format: InputImageFormat.nv21, // used only in iOS
-          bytesPerRow: image.width),
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: rotation, // used only in Android
+        format: InputImageFormat.nv21, // used only in iOS
+        bytesPerRow: image.width,
+      ),
     );
   }
 }
