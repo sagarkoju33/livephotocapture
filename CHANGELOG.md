@@ -17,3 +17,8 @@
 ## 1.0.4
 
 - version update of the pubspec.yml.
+
+## 1.0.5
+
+- permission denied issue fix
+- .
