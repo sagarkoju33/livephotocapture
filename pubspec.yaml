@@ -1,6 +1,6 @@
 name: livephotocapture
 description: A highly customizable Flutter package for face liveness detection with multiple challenge types. This package helps you verify that a real person is present in front of the camera, not a photo, video, or mask.
-version: 1.0.3
+version: 1.0.4
 repository: https://github.com/sagarkoju33/livephotocapture
 # repository: https://github.com/my_org/my_repo
 
@@ -11,14 +11,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  camera: ^0.10.6
-  camera_android: ^0.10.10
-  camera_avfoundation: ^0.9.18+4
+  camera: ^0.11.3
+  camera_android: ^0.10.10+14
+  camera_avfoundation: ^0.9.22+8
   google_mlkit_commons: ^0.11.0
   google_mlkit_face_detection: ^0.13.1
 
   # path: ^1.8.0
 
 dev_dependencies:
-  lints: ^5.0.0
+  lints: ^6.0.0
   test: ^1.24.0

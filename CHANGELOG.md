@@ -13,3 +13,7 @@
 ## 1.0.3
 
 - infoplist update for camera permission.
+
+## 1.0.4
+
+- version update of the pubspec.yml.
