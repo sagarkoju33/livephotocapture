@@ -15,7 +15,6 @@ import 'package:livephotocapture/src/detector_view/detector_view.dart'
     show DetectorView;
 import 'package:livephotocapture/src/painter/dotted_painter.dart';
 import 'package:livephotocapture/src/rule_set/rule_set.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class FaceDetectorScreen extends StatefulWidget {
   final int pauseDurationInSeconds;
