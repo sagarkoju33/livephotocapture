@@ -119,17 +119,25 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   Future<void> _startLiveFeed() async {
     try {
-      final status = await Permission.camera.request();
-      if (!status.isGranted) return;
+      final status = await Permission.camera.status;
+
+      if (status.isDenied || status.isRestricted) {
+        final result = await Permission.camera.request();
+        if (!result.isGranted) return;
+      }
+
+      if (status.isPermanentlyDenied) {
+        await openAppSettings();
+        return;
+      }
 
       final camera = _cameras[_cameraIndex];
+
       _controller = CameraController(
         camera,
         ResolutionPreset.high,
         enableAudio: false,
-        imageFormatGroup: Platform.isAndroid
-            ? ImageFormatGroup.nv21
-            : ImageFormatGroup.bgra8888,
+        imageFormatGroup: ImageFormatGroup.bgra8888,
       );
 
       await _controller!.initialize();
@@ -137,9 +145,6 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       if (!mounted) return;
 
       await _controller!.startImageStream(_processCameraImage);
-
-      widget.onCameraFeedReady?.call();
-      widget.onCameraLensDirectionChanged?.call(camera.lensDirection);
 
       setState(() {});
     } catch (e) {
