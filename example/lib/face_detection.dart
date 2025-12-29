@@ -33,7 +33,7 @@ class __FaceDetectorState extends State<_FaceDetector> {
         child: FaceDetectorScreen(
           // ruleset: [Rulesets.normal],
           onSuccessValidation: (validated) {},
-          hideCloseButton: true,
+          hideCloseButton: false,
           onValidationDone: (controller) {
             WidgetsBinding.instance.addPostFrameCallback((_) async {
               if (_hasCapturedImage || _isCapturing) return;
