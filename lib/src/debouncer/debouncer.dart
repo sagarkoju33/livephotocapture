@@ -4,38 +4,47 @@ import 'package:flutter/material.dart';
 class Debouncer {
   final int durationInSeconds;
   final VoidCallback onComplete;
-  Timer? _timer;
-  bool _isRunning = false;
-  DateTime? _startTime;
+  final VoidCallback onTick;
 
-  Debouncer({required this.durationInSeconds, required this.onComplete});
+  Timer? _ticker;
+  int _remaining;
+  bool _isRunning = false;
+
+  Debouncer({
+    required this.durationInSeconds,
+    required this.onComplete,
+    required this.onTick,
+  }) : _remaining = durationInSeconds;
+
+  int get timeLeft => _remaining;
 
   void start() {
     if (_isRunning) return;
-
     _isRunning = true;
-    _startTime = DateTime.now();
+    stop(); // Stop any existing timer
+    _remaining = durationInSeconds;
+    onTick(); // Initial tick
 
-    _timer = Timer(Duration(seconds: durationInSeconds), () {
+    // Repeating timer every 1 second
+    _ticker = Timer.periodic(Duration(seconds: 1), (timer) {
+      _remaining--;
       _isRunning = false;
-      onComplete();
+
+      if (_remaining <= 0) {
+        _remaining = 0;
+        onTick(); // Update UI one last time
+        stop(); // Stop the timer
+        onComplete(); // Call completion callback
+      } else {
+        onTick(); // Update UI each tick
+      }
     });
   }
 
   void stop() {
-    _timer?.cancel();
-    _isRunning = false;
-    _startTime = null;
+    _ticker?.cancel();
+    _ticker = null;
   }
 
   bool get isRunning => _isRunning;
-
-  int get timeLeft {
-    if (!_isRunning || _startTime == null) return 0;
-
-    final elapsed = DateTime.now().difference(_startTime!).inSeconds;
-    final remaining = durationInSeconds - elapsed;
-
-    return remaining > 0 ? remaining : 0;
-  }
 }

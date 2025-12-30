@@ -101,6 +101,11 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
       durationInSeconds: widget.pauseDurationInSeconds,
       onComplete: () =>
           dev.log('Timer is completed', name: 'Photo verification timer'),
+      onTick: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
     );
     _debouncer?.start();
 
@@ -217,7 +222,8 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
     });
     final faces = await _faceDetector.processImage(inputImage);
     hasFace = faces.isNotEmpty;
-    if (!(_debouncer?.isRunning ?? false)) handleRuleSet(faces);
+    handleRuleSet(faces);
+    // if (!(_debouncer?.isRunning ?? false)) handleRuleSet(faces);
     if (inputImage.metadata?.size != null &&
         inputImage.metadata?.rotation != null) {
     } else {
