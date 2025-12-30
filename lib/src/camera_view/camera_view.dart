@@ -1,8 +1,10 @@
+import 'dart:developer';
 import 'dart:io';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:livephotocapture/src/debouncer/debouncer.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class CameraView extends StatefulWidget {
@@ -32,11 +34,23 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   static List<CameraDescription> _cameras = [];
   CameraController? _controller;
   int _cameraIndex = -1;
+  Debouncer? _debouncer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _debouncer = Debouncer(
+      durationInSeconds: 5,
+      onComplete: () {
+        log("on back");
+      },
+      onTick: () {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
 
     _initialize();
   }

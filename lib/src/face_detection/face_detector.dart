@@ -14,6 +14,7 @@ import 'package:livephotocapture/src/detector_view/detector_view.dart'
     show DetectorView;
 import 'package:livephotocapture/src/painter/dotted_painter.dart';
 import 'package:livephotocapture/src/rule_set/rule_set.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class FaceDetectorScreen extends StatefulWidget {
   final int pauseDurationInSeconds;
@@ -58,7 +59,7 @@ class FaceDetectorScreen extends StatefulWidget {
     this.backgroundColor = Colors.white,
     this.contextPadding,
     this.cameraSize = const Size(200, 200),
-    this.pauseDurationInSeconds = 5,
+    this.pauseDurationInSeconds = 30,
     this.hideCloseButton = false,
   }) : assert(ruleset.length != 0, 'Ruleset cannot be empty');
 
@@ -66,7 +67,8 @@ class FaceDetectorScreen extends StatefulWidget {
   State<FaceDetectorScreen> createState() => _FaceDetectorScreenState();
 }
 
-class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
+class _FaceDetectorScreenState extends State<FaceDetectorScreen>
+    with WidgetsBindingObserver {
   ValueNotifier<List<Rulesets>> ruleset = ValueNotifier<List<Rulesets>>([]);
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
@@ -87,6 +89,7 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
   bool hasFace = false;
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _canProcess = false;
     _faceDetector.close();
     _debouncer?.stop();
@@ -95,6 +98,7 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
 
   @override
   void initState() {
+    WidgetsBinding.instance.addObserver(this);
     ruleset.value = widget.ruleset.toList();
     _currentTest = ValueNotifier<Rulesets?>(ruleset.value.first);
     _debouncer = Debouncer(
@@ -107,13 +111,58 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
         }
       },
     );
-    _debouncer?.start();
+    _requestCameraPermissionAndStartTimer();
 
     super.initState();
   }
 
+  bool _permissionGranted = false;
+
+  Future<void> _requestCameraPermissionAndStartTimer() async {
+    final status = await Permission.camera.request();
+
+    if (!mounted) return;
+
+    if (status.isGranted) {
+      setState(() {
+        _permissionGranted = true;
+      });
+
+      _debouncer?.start();
+      return;
+    }
+
+    // 🚨 User clicked "Don't allow"
+    if (status.isDenied || status.isRestricted || status.isPermanentlyDenied) {
+      await openAppSettings();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_permissionGranted) {
+      _requestCameraPermissionAndStartTimer();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!_permissionGranted) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text(
+              "Waiting for camera permission...",
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
     return Material(
       color: widget.backgroundColor ?? Colors.transparent,
       shadowColor: Colors.transparent,
@@ -129,7 +178,7 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
           mainAxisSize: MainAxisSize.max,
           // mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            !widget.hideCloseButton
+            widget.hideCloseButton
                 ? Align(
                     alignment: Alignment.topRight,
                     child: IconButton(
@@ -189,7 +238,6 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
                 return SizedBox.shrink();
               },
             ),
-
             AnimatedBuilder(
               animation: Listenable.merge([_currentTest, ruleset]),
               builder: (context, child) {
@@ -222,8 +270,7 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
     });
     final faces = await _faceDetector.processImage(inputImage);
     hasFace = faces.isNotEmpty;
-    handleRuleSet(faces);
-    // if (!(_debouncer?.isRunning ?? false)) handleRuleSet(faces);
+    if (!(_debouncer?.isRunning ?? false)) handleRuleSet(faces);
     if (inputImage.metadata?.size != null &&
         inputImage.metadata?.rotation != null) {
     } else {
