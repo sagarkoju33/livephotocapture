@@ -41,7 +41,19 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     _initialize();
   }
 
-  void _initialize() async {
+  Future<void> _initialize() async {
+    final status = await Permission.camera.request();
+
+    if (status.isDenied || status.isRestricted) {
+      // final result = await Permission.camera.request();
+      if (!status.isGranted) return;
+    }
+
+    if (status.isPermanentlyDenied) {
+      await openAppSettings();
+      return;
+    }
+
     if (_cameras.isEmpty) {
       _cameras = await availableCameras();
     }
@@ -69,26 +81,11 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-
-    if (state == AppLifecycleState.resumed) {
-      _checkPermissionAndRestartCamera();
+    if (state == AppLifecycleState.resumed && _controller == null) {
+      _initialize();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
       _stopLiveFeed();
-    }
-  }
-
-  Future<void> _checkPermissionAndRestartCamera() async {
-    final status = await Permission.camera.status;
-    if (status.isGranted) {
-      // Stop previous controller if any
-      await _stopLiveFeed();
-      // Re-initialize
-      _initialize();
-    } else {
-      // Optionally prompt the user
-      await openAppSettings();
     }
   }
 
@@ -119,38 +116,65 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   Future<void> _startLiveFeed() async {
     try {
-      final status = await Permission.camera.status;
-
-      if (status.isDenied || status.isRestricted) {
-        final result = await Permission.camera.request();
-        if (!result.isGranted) return;
-      }
-
-      if (status.isPermanentlyDenied) {
-        await openAppSettings();
-        return;
-      }
-
       final camera = _cameras[_cameraIndex];
 
       _controller = CameraController(
         camera,
         ResolutionPreset.high,
         enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.bgra8888,
+        imageFormatGroup: Platform.isIOS
+            ? ImageFormatGroup.bgra8888
+            : ImageFormatGroup.yuv420,
       );
 
       await _controller!.initialize();
-
       if (!mounted) return;
 
       await _controller!.startImageStream(_processCameraImage);
+
+      widget.onController?.call(_controller!);
+      widget.onCameraFeedReady?.call();
 
       setState(() {});
     } catch (e) {
       debugPrint('Camera error: $e');
     }
   }
+
+  // Future<void> _startLiveFeed() async {
+  //   try {
+  //     final status = await Permission.camera.status;
+
+  //     if (status.isDenied || status.isRestricted) {
+  //       final result = await Permission.camera.request();
+  //       if (!result.isGranted) return;
+  //     }
+
+  //     if (status.isPermanentlyDenied) {
+  //       await openAppSettings();
+  //       return;
+  //     }
+
+  //     final camera = _cameras[_cameraIndex];
+
+  //     _controller = CameraController(
+  //       camera,
+  //       ResolutionPreset.high,
+  //       enableAudio: false,
+  //       imageFormatGroup: ImageFormatGroup.bgra8888,
+  //     );
+
+  //     await _controller!.initialize();
+
+  //     if (!mounted) return;
+
+  //     await _controller!.startImageStream(_processCameraImage);
+
+  //     setState(() {});
+  //   } catch (e) {
+  //     debugPrint('Camera error: $e');
+  //   }
+  // }
 
   Uint8List convertYUV420ToNV21(CameraImage image) {
     final width = image.width;
@@ -193,10 +217,12 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     return nv21;
   }
 
-  Future _stopLiveFeed() async {
-    // await _controller?.stopImageStream();
-    await _controller?.dispose();
-    _controller = null;
+  Future<void> _stopLiveFeed() async {
+    if (_controller != null) {
+      await _controller!.stopImageStream();
+      await _controller!.dispose();
+      _controller = null;
+    }
   }
 
   void _processCameraImage(CameraImage image) {
