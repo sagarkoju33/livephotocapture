@@ -79,20 +79,20 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _checkPermission() async {
-    var status = await Permission.camera.status;
+  // Future<void> _checkPermission() async {
+  //   var status = await Permission.camera.status;
 
-    if (!status.isGranted) {
-      status = await Permission.camera.request();
-    }
+  //   if (!status.isGranted) {
+  //     status = await Permission.camera.request();
+  //   }
 
-    if (status.isGranted) {
-    } else if (status.isPermanentlyDenied || status.isDenied) {
-      if (!mounted) return;
+  //   if (status.isGranted) {
+  //   } else if (status.isPermanentlyDenied || status.isDenied) {
+  //     if (!mounted) return;
 
-      await openAppSettings();
-    }
-  }
+  //     await openAppSettings();
+  //   }
+  // }
 
   @override
   Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
@@ -198,32 +198,32 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _startLiveFeed() async {
-    try {
-      final camera = _cameras[_cameraIndex];
+  // Future<void> _startLiveFeed() async {
+  //   try {
+  //     final camera = _cameras[_cameraIndex];
 
-      _controller = CameraController(
-        camera,
-        ResolutionPreset.high,
-        enableAudio: false,
-        imageFormatGroup: Platform.isIOS
-            ? ImageFormatGroup.bgra8888
-            : ImageFormatGroup.yuv420,
-      );
+  //     _controller = CameraController(
+  //       camera,
+  //       ResolutionPreset.high,
+  //       enableAudio: false,
+  //       imageFormatGroup: Platform.isIOS
+  //           ? ImageFormatGroup.bgra8888
+  //           : ImageFormatGroup.yuv420,
+  //     );
 
-      await _controller!.initialize();
-      if (!mounted) return;
+  //     await _controller!.initialize();
+  //     if (!mounted) return;
 
-      await _controller!.startImageStream(_processCameraImage);
+  //     await _controller!.startImageStream(_processCameraImage);
 
-      widget.onController?.call(_controller!);
-      widget.onCameraFeedReady?.call();
+  //     widget.onController?.call(_controller!);
+  //     widget.onCameraFeedReady?.call();
 
-      setState(() {});
-    } catch (e) {
-      debugPrint('Camera error: $e');
-    }
-  }
+  //     setState(() {});
+  //   } catch (e) {
+  //     debugPrint('Camera error: $e');
+  //   }
+  // }
 
   // Future<void> _startLiveFeed() async {
   //   try {
