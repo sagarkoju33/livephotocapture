@@ -1,4 +1,3 @@
-import 'dart:developer' as dev;
 import 'dart:developer';
 import 'dart:io';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
@@ -174,7 +173,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   Widget _liveFeedBody() {
     if (_cameras.isEmpty || _controller == null) return Container();
     if (!_controller!.value.isInitialized) return Container();
-    if (_controller == null || _controller!.value.isRecordingPaused) {
+    if (_controller == null || _controller!.value.isCaptureOrientationLocked) {
       return Container();
     }
 
