@@ -29,4 +29,7 @@
 ## 1.0.7
 
 - permission denied issue fix in case of camera back
-- .
+
+## 1.0.8
+
+- issue fix on the permission allow and deny button
