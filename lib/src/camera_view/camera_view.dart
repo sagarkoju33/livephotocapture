@@ -1,8 +1,12 @@
+import 'dart:developer' as dev;
+import 'dart:developer';
 import 'dart:io';
 import 'package:google_mlkit_commons/google_mlkit_commons.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:livephotocapture/livephotocapture.dart';
+import 'package:livephotocapture/src/debouncer/debouncer.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class CameraView extends StatefulWidget {
@@ -33,44 +37,132 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   CameraController? _controller;
   int _cameraIndex = -1;
 
+  Debouncer? _debouncer;
+
+  // @override
+  // void initState() {
+  //   super.initState();
+  //   WidgetsBinding.instance.addObserver(this);
+
+  //   _initCamera();
+  // }
+
+  // Future<void> _initialize() async {
+  //   // 1️⃣ Check current permission status
+  //   var status = await Permission.camera.status;
+  //   dev.log("the status is ============>$status");
+
+  //   // 2️⃣ Request permission if not granted
+  //   if (!status.isGranted) {
+  //     status = await Permission.camera.request();
+  //   }
+
+  //   if (status.isPermanentlyDenied) {
+  //     // User pressed "Don't ask again", open app settings
+  //     await openAppSettings();
+  //   } else {
+  //     _initCamera();
+  //   }
+  // }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    PermissionManager.requestCameraPermission();
+    // _checkPermission();
 
-    _initialize();
+    // Initialize camera if permission already granted (hot restart case)
+    Permission.camera.status.then((status) {
+      if (status.isGranted && _controller == null) {
+        _initializeCameraController();
+      }
+    });
   }
 
-  Future<void> _initialize() async {
-    final status = await Permission.camera.request();
+  Future<void> _checkPermission() async {
+    var status = await Permission.camera.status;
 
-    if (status.isDenied || status.isRestricted) {
-      // final result = await Permission.camera.request();
-      if (!status.isGranted) return;
+    if (!status.isGranted) {
+      status = await Permission.camera.request();
     }
 
-    if (status.isPermanentlyDenied) {
+    if (status.isGranted) {
+    } else if (status.isPermanentlyDenied || status.isDenied) {
+      if (!mounted) return;
+
       await openAppSettings();
-      return;
-    }
-
-    if (_cameras.isEmpty) {
-      _cameras = await availableCameras();
-    }
-
-    _cameraIndex = _cameras.indexWhere(
-      (cam) => cam.lensDirection == widget.initialCameraLensDirection,
-    );
-
-    if (_cameraIndex != -1) {
-      await _startLiveFeed();
     }
   }
+
+  @override
+  Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
+    log("App lifecycle state: $state");
+    if (state == AppLifecycleState.resumed) {
+      if (_controller == null) {
+        var status = await Permission.camera.status;
+        if (status.isGranted) {
+          await _initializeCameraController();
+        }
+      }
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _stopLiveFeed();
+    }
+  }
+
+  bool _isInitializing = false;
+
+  Future<void> _initializeCameraController() async {
+    if (_isInitializing) return;
+    _isInitializing = true;
+
+    try {
+      if (_cameras.isEmpty) _cameras = await availableCameras();
+      _cameraIndex = _cameras.indexWhere(
+        (cam) => cam.lensDirection == widget.initialCameraLensDirection,
+      );
+      if (_cameraIndex == -1) return;
+
+      final camera = _cameras[_cameraIndex];
+      _controller = CameraController(
+        camera,
+        ResolutionPreset.high,
+        enableAudio: false,
+        imageFormatGroup: Platform.isIOS
+            ? ImageFormatGroup.bgra8888
+            : ImageFormatGroup.yuv420,
+      );
+
+      await _controller!.initialize();
+      if (!mounted) return;
+
+      await _controller!.startImageStream(_processCameraImage);
+
+      widget.onController?.call(_controller!);
+      widget.onCameraFeedReady?.call();
+      setState(() {});
+    } finally {
+      _isInitializing = false;
+    }
+  }
+
+  // @override
+  // void didChangeAppLifecycleState(AppLifecycleState state) {
+  //   if (state == AppLifecycleState.resumed && _controller == null) {
+  //     // Try initializing camera again after permission dialog
+  //     _initCamera();
+  //   } else if (state == AppLifecycleState.inactive ||
+  //       state == AppLifecycleState.paused) {
+  //     _stopLiveFeed();
+  //   }
+  // }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stopLiveFeed();
+    _debouncer?.stop();
     super.dispose();
   }
 
@@ -79,22 +171,15 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     return _liveFeedBody();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _controller == null) {
-      _initialize();
-    } else if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
-      _stopLiveFeed();
-    }
-  }
-
   Widget _liveFeedBody() {
-    if (_cameras.isEmpty) return Container();
-    if (_controller == null) return Container();
-    if ((_controller?.value.isInitialized ?? false) == false) {
+    if (_cameras.isEmpty || _controller == null) return Container();
+    if (!_controller!.value.isInitialized) return Container();
+    if (_controller == null || _controller!.value.isRecordingPaused) {
       return Container();
     }
+
+    // Prevent using disposed controller
+
     widget.onController?.call(_controller!);
 
     return SizedBox(
@@ -219,8 +304,20 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   Future<void> _stopLiveFeed() async {
     if (_controller != null) {
-      await _controller!.stopImageStream();
-      await _controller!.dispose();
+      try {
+        if (_controller!.value.isStreamingImages) {
+          await _controller!.stopImageStream();
+        }
+      } on CameraException catch (e) {
+        debugPrint('CameraException while stopping stream: $e');
+      }
+
+      try {
+        await _controller!.dispose();
+      } on CameraException catch (e) {
+        debugPrint('CameraException while disposing: $e');
+      }
+
       _controller = null;
     }
   }

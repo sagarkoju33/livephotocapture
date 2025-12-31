@@ -14,6 +14,7 @@ import 'package:livephotocapture/src/detector_view/detector_view.dart'
     show DetectorView;
 import 'package:livephotocapture/src/painter/dotted_painter.dart';
 import 'package:livephotocapture/src/rule_set/rule_set.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class FaceDetectorScreen extends StatefulWidget {
   final int pauseDurationInSeconds;
@@ -58,7 +59,7 @@ class FaceDetectorScreen extends StatefulWidget {
     this.backgroundColor = Colors.white,
     this.contextPadding,
     this.cameraSize = const Size(200, 200),
-    this.pauseDurationInSeconds = 5,
+    this.pauseDurationInSeconds = 30,
     this.hideCloseButton = false,
   }) : assert(ruleset.length != 0, 'Ruleset cannot be empty');
 
@@ -66,7 +67,8 @@ class FaceDetectorScreen extends StatefulWidget {
   State<FaceDetectorScreen> createState() => _FaceDetectorScreenState();
 }
 
-class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
+class _FaceDetectorScreenState extends State<FaceDetectorScreen>
+    with WidgetsBindingObserver {
   ValueNotifier<List<Rulesets>> ruleset = ValueNotifier<List<Rulesets>>([]);
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
@@ -85,8 +87,11 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
   Debouncer? _debouncer;
   CameraController? controller;
   bool hasFace = false;
+  Future<void>? _permissionFuture;
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _canProcess = false;
     _faceDetector.close();
     _debouncer?.stop();
@@ -95,21 +100,53 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
 
   @override
   void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
     ruleset.value = widget.ruleset.toList();
     _currentTest = ValueNotifier<Rulesets?>(ruleset.value.first);
+
     _debouncer = Debouncer(
       durationInSeconds: widget.pauseDurationInSeconds,
-      onComplete: () =>
-          dev.log('Timer is completed', name: 'Photo verification timer'),
+      onComplete: () => dev.log('Timer completed'),
       onTick: () {
-        if (mounted) {
-          setState(() {});
-        }
+        if (mounted) setState(() {});
       },
     );
-    _debouncer?.start();
+    PermissionManager.requestCameraPermission().then((granted) {
+      if (granted) {
+        _debouncer?.start(); // start timer only if permission granted
+      }
+    });
+    // Only request permission here
+    // _requestCameraPermissionAndStartTimer();
+  }
 
-    super.initState();
+  bool _permissionGranted = false;
+
+  Future<void> _requestCameraPermissionAndStartTimer() async {
+    if (_permissionFuture != null) {
+      await _permissionFuture; // wait for the existing request
+      return;
+    }
+    PermissionManager.requestCameraPermission().then((granted) {
+      if (granted) {
+        _debouncer?.start(); // start timer only if permission granted
+      }
+    });
+    ;
+    try {
+      await _permissionFuture;
+    } finally {
+      _permissionFuture = null; // reset after done
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_permissionGranted) {
+      // Request permission only if not yet granted
+      _requestCameraPermissionAndStartTimer();
+    }
   }
 
   @override
@@ -129,7 +166,7 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
           mainAxisSize: MainAxisSize.max,
           // mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            !widget.hideCloseButton
+            widget.hideCloseButton
                 ? Align(
                     alignment: Alignment.topRight,
                     child: IconButton(
@@ -189,7 +226,6 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
                 return SizedBox.shrink();
               },
             ),
-
             AnimatedBuilder(
               animation: Listenable.merge([_currentTest, ruleset]),
               builder: (context, child) {
@@ -222,8 +258,7 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
     });
     final faces = await _faceDetector.processImage(inputImage);
     hasFace = faces.isNotEmpty;
-    handleRuleSet(faces);
-    // if (!(_debouncer?.isRunning ?? false)) handleRuleSet(faces);
+    if (!(_debouncer?.isRunning ?? false)) handleRuleSet(faces);
     if (inputImage.metadata?.size != null &&
         inputImage.metadata?.rotation != null) {
     } else {
@@ -534,5 +569,36 @@ class _FaceDetectorScreenState extends State<FaceDetectorScreen> {
       sum += pow(e1[i] - e2[i], 2).toDouble();
     }
     return sqrt(sum); // Euclidean distance
+  }
+}
+
+class PermissionManager {
+  static Future<void>? _ongoingRequest;
+
+  static Future<bool> requestCameraPermission() async {
+    if (_ongoingRequest != null) {
+      await _ongoingRequest; // wait if a request is already running
+      return await Permission.camera.isGranted;
+    }
+
+    _ongoingRequest = _request();
+    try {
+      await _ongoingRequest;
+      return await Permission.camera.isGranted;
+    } finally {
+      _ongoingRequest = null;
+    }
+  }
+
+  static Future<void> _request() async {
+    var status = await Permission.camera.status;
+
+    if (!status.isGranted) {
+      status = await Permission.camera.request();
+    }
+
+    if (!status.isGranted && (status.isPermanentlyDenied || status.isDenied)) {
+      await openAppSettings();
+    }
   }
 }

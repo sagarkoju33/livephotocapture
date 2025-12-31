@@ -20,7 +20,7 @@ class Debouncer {
 
   void start() {
     if (_isRunning) return;
-    _isRunning = true;
+    _isRunning = false;
     stop(); // Stop any existing timer
     _remaining = durationInSeconds;
     onTick(); // Initial tick
@@ -28,7 +28,6 @@ class Debouncer {
     // Repeating timer every 1 second
     _ticker = Timer.periodic(Duration(seconds: 1), (timer) {
       _remaining--;
-      _isRunning = false;
 
       if (_remaining <= 0) {
         _remaining = 0;
@@ -43,6 +42,7 @@ class Debouncer {
 
   void stop() {
     _ticker?.cancel();
+    _isRunning = true;
     _ticker = null;
   }
 
