@@ -59,7 +59,7 @@ class FaceDetectorScreen extends StatefulWidget {
     this.backgroundColor = Colors.white,
     this.contextPadding,
     this.cameraSize = const Size(200, 200),
-    this.pauseDurationInSeconds = 30,
+    this.pauseDurationInSeconds = 5,
     this.hideCloseButton = false,
   }) : assert(ruleset.length != 0, 'Ruleset cannot be empty');
 

@@ -33,3 +33,7 @@
 ## 1.0.8
 
 - issue fix on the permission allow and deny button
+
+## 1.0.9
+
+- issue fix on the permission allow and deny button
